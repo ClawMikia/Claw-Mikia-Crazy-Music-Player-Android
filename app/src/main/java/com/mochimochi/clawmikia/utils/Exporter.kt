@@ -54,14 +54,29 @@ object Exporter {
                             val uri = Uri.parse(song.filePath)
                             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                                 val safeArtist = song.artist.replace(invalidChars, "_")
-                                    .ifBlank { "Unknown Artist" }
                                 val safeTitle = song.title.replace(invalidChars, "_")
-                                    .ifBlank { "Unknown Title" }
-                                var fileName = "$safeArtist - $safeTitle.mp3"
+                                val safeTitleNonBlank = if (safeTitle.isBlank()) "Unknown Title" else safeTitle
+                                // Strip a leading track-number prefix (e.g. "003 - ") so the export
+                                // filename is just the song title, without "Unknown Artist - " or any
+                                // leading sample/track text.
+                                val cleanTitle = safeTitleNonBlank.replace(Regex("""^\d+\s*-\s*"""), "")
+                                val cleanTitleNonBlank = if (cleanTitle.isBlank()) safeTitleNonBlank else cleanTitle
+                                // Do not prefix the filename with "Unknown Artist - "
+                                // when the artist is blank or literally "Unknown Artist";
+                                // just use the title.
+                                var fileName = when {
+                                    safeArtist.isNotBlank() && safeArtist != "Unknown Artist" ->
+                                        "$safeArtist - $cleanTitleNonBlank.mp3"
+                                    else -> "$cleanTitleNonBlank.mp3"
+                                }
 
                                 var counter = 1
                                 while (usedNames.contains(fileName)) {
-                                    fileName = "$safeArtist - $safeTitle (${song.id}_$counter).mp3"
+                                    fileName = when {
+                                        safeArtist.isNotBlank() && safeArtist != "Unknown Artist" ->
+                                            "$safeArtist - $cleanTitleNonBlank (${song.id}_$counter).mp3"
+                                        else -> "$cleanTitleNonBlank (${song.id}_$counter).mp3"
+                                    }
                                     counter++
                                 }
                                 usedNames.add(fileName)
